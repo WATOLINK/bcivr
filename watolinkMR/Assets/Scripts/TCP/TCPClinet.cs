@@ -1,6 +1,7 @@
 using System;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using UnityEngine;
 
 public class TCPClient : MonoBehaviour
@@ -8,6 +9,7 @@ public class TCPClient : MonoBehaviour
     private TcpClient client;
     private NetworkStream stream;
     private byte[] buffer = new byte[1024];
+    private Thread receiveThread;
 
     void Start()
     {
@@ -21,9 +23,12 @@ public class TCPClient : MonoBehaviour
             client = new TcpClient("127.0.0.1", 65432); // server settings
             stream = client.GetStream();
             Debug.Log("Connected to server");
-            
+
             SendMessageToServer("Hello from Unity!");
-            ReadResponse();
+
+            receiveThread = new Thread(ReadResponse);
+            receiveThread.IsBackground = true;
+            receiveThread.Start();
         }
         catch (Exception e)
         {
@@ -40,14 +45,28 @@ public class TCPClient : MonoBehaviour
 
     void ReadResponse()
     {
-        int bytesRead = stream.Read(buffer, 0, buffer.Length);
-        string response = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-        Debug.Log("Server Response: " + response);
+        try
+        {
+            while (client.Connected)
+            {
+                int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                if (bytesRead > 0)
+                {
+                    string response = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    Debug.Log("Server Response: " + response);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Read error: " + e.Message);
+        }
     }
 
     void OnApplicationQuit()
     {
-        stream.Close();
-        client.Close();
+        receiveThread?.Abort();
+        stream?.Close();
+        client?.Close();
     }
 }
